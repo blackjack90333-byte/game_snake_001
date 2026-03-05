@@ -1,1 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snake — Kaboom.js</title>
+  <style>
+    html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui,Arial}
+    #wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%}
+    h1{margin:10px 0 4px;font-size:20px}
+    p{margin:0 0 12px;color:#bbb}
+    canvas{border:4px solid #222;border-radius:8px}
+    .controls{margin-top:12px;display:flex;gap:8px}
+    .btn{background:#222;color:#fff;border:0;padding:8px 12px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <h1>Змейка (Kaboom.js)</h1>
+    <p>Управление: стрелки / WASD. Съешь яблоко — растёшь.</p>
+    <div id="game"></div>
+    <div class="controls">
+      <button class="btn" id="btn-up">▲</button>
+      <button class="btn" id="btn-left">◀</button>
+      <button class="btn" id="btn-right">▶</button>
+      <button class="btn" id="btn-down">▼</button>
+    </div>
+  </div>
 
+  <script type="module">
+    // Kaboom import from CDN (unpkg)
+    import kaboom from "https://unpkg.com/kaboom/dist/kaboom.mjs";
+
+    // Init Kaboom
+    kaboom({
+      global: true,
+      width: 480,
+      height: 480,
+      scale: 1,
+      clearColor: [0, 0, 0, 1],
+      root: document.getElementById("game"),
+    });
+
+    // Grid settings
+    const CELL = 24;
+    const COLS = Math.floor(width() / CELL);
+    const ROWS = Math.floor(height() / CELL);
+
+    // Game state
+    let snake = [ { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) } ];
+    let dir = { x: 1, y: 0 };
+    let appleObj = null;
+    let snakeObjs = [];
+    let score = 0;
+
+    function randCell(){
+      return {
+        x: Math.floor(rand(0, COLS)),
+        y: Math.floor(rand(0, ROWS)),
+      };
+    }
+
+    function spawnApple(){
+      const p = randCell();
+      // avoid spawning on snake
+      for (const s of snake){
+        if (s.x === p.x && s.y === p.y){
+          return spawnApple();
+        }
+      }
+      if (appleObj){ destroy(appleObj); }
+      appleObj = add([
+        rect(CELL, CELL),
+        pos(p.x * CELL, p.y * CELL),
+        color(1, 0.2, 0.2),
+        origin("topleft"),
+        "apple",
+      ]);
+    }
+
+    function redrawSnake(){
+      // destroy old
+      for (const o of snakeObjs){ destroy(o); }
+      snakeObjs = [];
+      // draw new
+      for (let i = 0; i < snake.length; i++){
+        const s = snake[i];
+        snakeObjs.push(add([
+          rect(CELL, CELL),
+          pos(s.x * CELL, s.y * CELL),
+          color(0.2, 0.9, 0.2),
+          origin("topleft"),
+        ]));
+      }
+    }
+
+    function resetGame(){
+      // clear
+      for (const o of snakeObjs){ destroy(o); }
+      snakeObjs = [];
+      if (appleObj){ destroy(appleObj); appleObj = null; }
+      score = 0;
+      snake = [ { x: Math.floor(COLS/2), y: Math.floor(ROWS/2) } ];
+      dir = { x: 1, y: 0 };
+      spawnApple();
+      redrawSnake();
+    }
+
+    // Score text
+    const scoreText = add([
+      text("Score: 0", { size: 18 }),
+      pos(8, 8),
+      layer("ui"),
+    ]);
+
+    // Game tick
+    const TICK = 0.12; // seconds
+    loop(TICK, () => {
+      // compute new head
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+      // wrap around
+      head.x = (head.x + COLS) % COLS;
+      head.y = (head.y + ROWS) % ROWS;
+
+      // self collision -> reset
+      for (let i = 0; i < snake.length; i++){
+        if (snake[i].x === head.x && snake[i].y === head.y){
+          resetGame();
+          return;
+        }
+      }
+
+      // advance
+      snake.unshift(head);
+
+      // check apple
+      if (appleObj){
+        const ax = Math.floor(appleObj.pos.x / CELL);
+        const ay = Math.floor(appleObj.pos.y / CELL);
+        if (head.x === ax && head.y === ay){
+          // eat
+          score += 1;
+          scoreText.text = `Score: ${score}`;
+          destroy(appleObj);
+          appleObj = null;
+          spawnApple();
+        } else {
+          // move: remove tail
+          snake.pop();
+        }
+      }
+
+      redrawSnake();
+    });
+
+    // Controls
+    keyPress("left", () => { if (dir.x === 0) dir = { x: -1, y: 0 }; });
+    keyPress("right", () => { if (dir.x === 0) dir = { x: 1, y: 0 }; });
+    keyPress("up", () => { if (dir.y === 0) dir = { x: 0, y: -1 }; });
+    keyPress("down", () => { if (dir.y === 0) dir = { x: 0, y: 1 }; });
+
+    // WASD
+    keyPress("a", () => { if (dir.x === 0) dir = { x: -1, y: 0 }; });
+    keyPress("d", () => { if (dir.x === 0) dir = { x: 1, y: 0 }; });
+    keyPress("w", () => { if (dir.y === 0) dir = { x: 0, y: -1 }; });
+    keyPress("s", () => { if (dir.y === 0) dir = { x: 0, y: 1 }; });
+
+    // Mobile buttons
+    document.getElementById('btn-up').addEventListener('click', ()=>{ if (dir.y === 0) dir = { x: 0, y: -1 }; });
+    document.getElementById('btn-down').addEventListener('click', ()=>{ if (dir.y === 0) dir = { x: 0, y: 1 }; });
+    document.getElementById('btn-left').addEventListener('click', ()=>{ if (dir.x === 0) dir = { x: -1, y: 0 }; });
+    document.getElementById('btn-right').addEventListener('click', ()=>{ if (dir.x === 0) dir = { x: 1, y: 0 }; });
+
+    // Start
+    resetGame();
+
+  </script>
+</body>
+</html>
